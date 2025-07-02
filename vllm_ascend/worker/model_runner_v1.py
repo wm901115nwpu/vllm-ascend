@@ -1817,7 +1817,7 @@ class NPUModelRunner(LoRAModelRunnerMixin):
         is_compile: bool = False,
         with_prefill: bool = True,
         skip_attn: bool = True,
-        num_tokens_across_dp: Optional[int] = None,
+        num_tokens_across_dp: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Set num_scheduled_tokens based on num_tokens and max_num_seqs
         # for dummy run with LoRA so that the num_reqs collectively
