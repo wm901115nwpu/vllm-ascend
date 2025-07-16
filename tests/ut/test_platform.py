@@ -373,7 +373,6 @@ class TestNPUPlatform(TestBase):
     @patch("vllm_ascend.utils.is_310p", return_value=False)
     @patch("vllm_ascend.ascend_config.check_ascend_config")
     @patch("vllm_ascend.ascend_config.init_ascend_config")
-    @patch("vllm.envs.VLLM_USE_V1", True)
     def test_check_and_update_config_v1_worker_class_selection(
             self, mock_init_ascend, mock_check_ascend, mock_is_310p):
         mock_init_ascend.return_value = self.mock_ascend_config
@@ -391,71 +390,7 @@ class TestNPUPlatform(TestBase):
 
     @patch("vllm_ascend.ascend_config.check_ascend_config")
     @patch("vllm_ascend.ascend_config.init_ascend_config")
-    @patch("vllm.envs.VLLM_USE_V1", False)
-    def test_check_and_update_config_speculative_worker_config(
-            self, mock_init_ascend, mock_check_ascend):
-        mock_init_ascend.return_value = self.mock_ascend_config
-        self.mock_vllm_config.speculative_config = MagicMock()
-        self.mock_vllm_config.speculative_config.disable_logprobs = True
-        self.mock_vllm_config.parallel_config.worker_cls = "auto"
-
-        with patch.dict("os.environ", {}):
-            from vllm_ascend import platform
-
-            importlib.reload(platform)
-            self.platform.check_and_update_config(self.mock_vllm_config)
-            import os
-
-            self.assertEqual(os.environ.get("ACL_OP_INIT_MODE"), "1")
-            self.assertEqual(
-                self.mock_vllm_config.parallel_config.worker_cls,
-                "vllm.spec_decode.spec_decode_worker.create_spec_worker",
-            )
-            self.assertEqual(
-                self.mock_vllm_config.parallel_config.sd_worker_cls,
-                "vllm_ascend.worker.worker.NPUWorker",
-            )
-
-    @patch("vllm_ascend.ascend_config.check_ascend_config")
-    @patch("vllm_ascend.ascend_config.init_ascend_config")
-    @patch("vllm.envs.VLLM_USE_V1", False)
-    def test_check_and_update_config_multi_step_worker_config(
-            self, mock_init_ascend, mock_check_ascend):
-        mock_init_ascend.return_value = self.mock_ascend_config
-        self.mock_vllm_config.scheduler_config.is_multi_step = True
-        self.mock_vllm_config.parallel_config.worker_cls = "auto"
-
-        from vllm_ascend import platform
-
-        importlib.reload(platform)
-        self.platform.check_and_update_config(self.mock_vllm_config)
-        self.assertEqual(
-            self.mock_vllm_config.parallel_config.worker_cls,
-            "vllm_ascend.worker.multi_step_worker.MultiStepWorker",
-        )
-
-    @patch("vllm_ascend.ascend_config.check_ascend_config")
-    @patch("vllm_ascend.ascend_config.init_ascend_config")
-    @patch("vllm.envs.VLLM_USE_V1", False)
-    def test_check_and_update_config_default_worker_config(
-            self, mock_init_ascend, mock_check_ascend):
-        mock_init_ascend.return_value = self.mock_ascend_config
-        self.mock_vllm_config.parallel_config.worker_cls = "auto"
-        self.mock_vllm_config.scheduler_config.is_multi_step = False
-
-        from vllm_ascend import platform
-
-        importlib.reload(platform)
-        self.platform.check_and_update_config(self.mock_vllm_config)
-        self.assertEqual(
-            self.mock_vllm_config.parallel_config.worker_cls,
-            "vllm_ascend.worker.worker.NPUWorker",
-        )
-
-    @patch("vllm_ascend.ascend_config.check_ascend_config")
-    @patch("vllm_ascend.ascend_config.init_ascend_config")
     @patch("vllm_ascend.utils.is_310p", return_value=True)
-    @patch("vllm.envs.VLLM_USE_V1", True)
     def test_check_and_update_config_310p_no_custom_ops(
             self, mock_is_310p, mock_init_ascend, mock_check_ascend):
         mock_init_ascend.return_value = self.mock_ascend_config
@@ -545,45 +480,6 @@ class TestNPUPlatform(TestBase):
         self.assertEqual(
             result,
             "vllm_ascend.attention.attention_v1.AscendAttentionBackend")
-
-    @patch('vllm_ascend.platform.get_ascend_config')
-    def test_get_attn_backend_cls_use_mla_only(self, mock_get_ascend_config):
-        mock_config = MagicMock()
-        mock_config.torchair_graph_config.enabled = False
-
-        mock_get_ascend_config.return_value = mock_config
-
-        result = self.platform.get_attn_backend_cls(
-            selected_backend="ascend",
-            head_size=64,
-            dtype="float16",
-            kv_cache_dtype="float16",
-            block_size=64,
-            use_v1=False,
-            use_mla=True,
-        )
-        self.assertEqual(
-            result,
-            "vllm_ascend.attention.attention.AscendMLAAttentionBackend")
-
-    @patch('vllm_ascend.platform.get_ascend_config')
-    def test_get_attn_backend_cls_default_case(self, mock_get_ascend_config):
-        mock_config = MagicMock()
-        mock_config.torchair_graph_config.enabled = False
-
-        mock_get_ascend_config.return_value = mock_config
-
-        result = self.platform.get_attn_backend_cls(
-            selected_backend="ascend",
-            head_size=64,
-            dtype="float16",
-            kv_cache_dtype="float16",
-            block_size=64,
-            use_v1=False,
-            use_mla=False,
-        )
-        self.assertEqual(
-            result, "vllm_ascend.attention.attention.AscendAttentionBackend")
 
     def test_get_punica_wrapper(self):
         result = self.platform.get_punica_wrapper()
