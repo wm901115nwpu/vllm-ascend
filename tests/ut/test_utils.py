@@ -239,17 +239,27 @@ class TestUtils(TestBase):
     def test_vllm_version_is(self):
         with mock.patch.dict(os.environ, {"VLLM_VERSION": "1.0.0"}):
             with mock.patch("vllm.__version__", "1.0.0"):
-                self.assertTrue(utils.vllm_version_is("1.0.0"))
-                self.assertFalse(utils.vllm_version_is("2.0.0"))
+                self.assertTrue(utils.vllm_version_is.__wrapped__("1.0.0"))
+                self.assertFalse(utils.vllm_version_is.__wrapped__("2.0.0"))
             with mock.patch("vllm.__version__", "2.0.0"):
-                self.assertTrue(utils.vllm_version_is("1.0.0"))
-                self.assertFalse(utils.vllm_version_is("2.0.0"))
+                self.assertTrue(utils.vllm_version_is.__wrapped__("1.0.0"))
+                self.assertFalse(utils.vllm_version_is.__wrapped__("2.0.0"))
         with mock.patch("vllm.__version__", "1.0.0"):
-            self.assertTrue(utils.vllm_version_is("1.0.0"))
-            self.assertFalse(utils.vllm_version_is("2.0.0"))
+            self.assertTrue(utils.vllm_version_is.__wrapped__("1.0.0"))
+            self.assertFalse(utils.vllm_version_is.__wrapped__("2.0.0"))
         with mock.patch("vllm.__version__", "2.0.0"):
-            self.assertTrue(utils.vllm_version_is("2.0.0"))
-            self.assertFalse(utils.vllm_version_is("1.0.0"))
+            self.assertTrue(utils.vllm_version_is.__wrapped__("2.0.0"))
+            self.assertFalse(utils.vllm_version_is.__wrapped__("1.0.0"))
+        # Test caching takes effect
+        utils.vllm_version_is.cache_clear()
+        utils.vllm_version_is("1.0.0")
+        misses = utils.vllm_version_is.cache_info().misses
+        hits = utils.vllm_version_is.cache_info().hits
+        self.assertEqual(misses, 1)
+        self.assertEqual(hits, 0)
+        utils.vllm_version_is("1.0.0")
+        hits = utils.vllm_version_is.cache_info().hits
+        self.assertEqual(hits, 1)
 
     def test_update_aclgraph_sizes(self):
         # max_num_batch_sizes < len(original_sizes)
@@ -300,6 +310,24 @@ class TestUtils(TestBase):
                          "Delete torchair cache dir failed")
         self.assertFalse(utils.check_kv_cache_bytes_cache_exist(),
                          "Delete kv cache bytes cache dir failed")
+
+    @mock.patch("vllm.model_executor.custom_op.CustomOp")
+    @mock.patch("vllm_ascend.ops.activation.AscendQuickGELU")
+    @mock.patch("vllm_ascend.ops.activation.AscendSiluAndMul")
+    def test_register_ascend_customop(self, mock_ascend_silu_and_mul,
+                                      mock_ascend_quick_gelu, mock_customop):
+        utils._ASCEND_CUSTOMOP_IS_REIGISTERED = False
+
+        # ascend custom op is not registered
+        utils.register_ascend_customop()
+        # should call register_oot twice
+        self.assertEqual(mock_customop.register_oot.call_count, 2)
+        self.assertTrue(utils._ASCEND_CUSTOMOP_IS_REIGISTERED)
+
+        # ascend custom op is already registered
+        utils.register_ascend_customop()
+        # should not register_oot again, thus only called twice in this ut
+        self.assertEqual(mock_customop.register_oot.call_count, 2)
 
 
 class TestProfileExecuteDuration(unittest.TestCase):
