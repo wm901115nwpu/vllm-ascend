@@ -24,7 +24,7 @@ import types
 import weakref
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Union, cast, get_args
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -79,11 +79,12 @@ from vllm_ascend.attention.mla_v1 import (AscendMLAMetadata,
                                           CommonAttentionMetadata)
 from vllm_ascend.platform import NPUPlatform
 from vllm_ascend.sample.rejection_sampler import AscendRejectionSampler
+from vllm_ascend.torchair.utils import (check_torchair_cache_exist,
+                                        write_kv_cache_bytes_to_file)
 from vllm_ascend.utils import (ACL_FORMAT_FRACTAL_ND, ACL_FORMAT_FRACTAL_NZ,
-                               ProfileExecuteDuration,
-                               check_torchair_cache_exist, is_310p,
+                               ProfileExecuteDuration, is_310p,
                                maybe_converting_weight_acl_format,
-                               vllm_version_is, write_kv_cache_bytes_to_file)
+                               vllm_version_is)
 from vllm_ascend.worker.eagle_proposer_v1 import EagleProposer
 from vllm_ascend.worker.mtp_proposer_v1 import MtpProposer
 from vllm_ascend.worker.npu_input_batch import CachedRequestState, InputBatch
@@ -92,7 +93,6 @@ if vllm_version_is("0.9.2"):
     from vllm.model_executor.models.interfaces import has_step_pooler
     from vllm.v1.utils import bind_kv_cache
 else:
-    from vllm.pooling_params import PoolingTask
     from vllm.v1.worker.utils import bind_kv_cache
 
 if TYPE_CHECKING:
@@ -407,13 +407,10 @@ class NPUModelRunner(LoRAModelRunnerMixin):
                 generator = None
 
             if not vllm_version_is("0.9.2") and pooling_params:
-                assert pooling_params.task is not None, (
+                assert (task := pooling_params.task) is not None, (
                     "You did not set `task` in the API")
                 model = cast(VllmModelForPooling, self.model)
-                to_update = (model.pooler.get_pooling_updates(
-                    pooling_params.task))
-                assert to_update is not None, (
-                    f"{pooling_params.task=} is not supported by the model")
+                to_update = model.pooler.get_pooling_updates(task)
                 to_update.apply(pooling_params)
 
             self.requests[req_id] = CachedRequestState(
@@ -1771,7 +1768,6 @@ class NPUModelRunner(LoRAModelRunnerMixin):
             dummy_pooling_params = PoolingParams(task=dummy_task)
 
             to_update = model.pooler.get_pooling_updates(dummy_task)
-            assert to_update is not None
             to_update.apply(dummy_pooling_params)
 
             dummy_metadata = PoolingMetadata(
@@ -2433,7 +2429,4 @@ class NPUModelRunner(LoRAModelRunnerMixin):
         if not is_pooling_model(model):
             return []
 
-        return [
-            task for task in get_args(PoolingTask)
-            if model.pooler.get_pooling_updates(task)
-        ]
+        return list(model.pooler.get_supported_tasks())
