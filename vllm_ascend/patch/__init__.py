@@ -133,6 +133,32 @@
 #       engine-core-level customization, or when the feature modules no longer
 #       need an entry-point hook.
 #
+# ** 5b. File: platform/patch_encoder_cache_lookahead.py**
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   1. `vllm.v1.core.sched.scheduler.Scheduler._try_schedule_encoder_inputs`
+#   2. `vllm.v1.core.sched.scheduler.Scheduler._free_encoder_inputs`
+#    Why:
+#       With non-zero prefill lookahead, two multimodal items that cannot
+#       share the encoder cache deadlock when the gap between them is smaller
+#       than twice the lookahead. can_allocate failure stops the chunk
+#       lookahead tokens before the next item, and the free path keeps the
+#       consumed item until the cursor has passed its end by that same
+#       lookahead, so the next step schedules 0 tokens forever.
+#    How:
+#       Wrap both Scheduler methods so every subclass inherits the backport
+#       of vLLM #60553. On can_allocate failure, stop at the next item and
+#       do not grow the chunk with the lookahead shift. Free a consumed item
+#       once the cursor passes its end, still honoring num_output_placeholders.
+#       The disable_chunked_mm_input rollback keeps its lookahead shift. When
+#       the installed vLLM already contains #60553, the free wrap is skipped
+#       and an already-correct schedule token count is returned unchanged.
+#    Related PR (if no, explain why):
+#       https://github.com/vllm-project/vllm/pull/60553
+#       https://github.com/vllm-project/vllm-ascend/issues/19585
+#    Future Plan:
+#       Remove this patch once every supported vLLM pin (verified main and
+#       the release tag) includes #60553.
+#
 # ** 6. File: platform/patch_engram_config.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   1. `vllm.config.engram.EngramConfig.verify_model_config`

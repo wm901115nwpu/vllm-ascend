@@ -1,0 +1,8 @@
+# Placeholder until the upstream PR number is known. Rename to <PR>.yaml.
+pr: 0
+entries:
+  - category: bugfix
+    text: >-
+      Fixed a multi-image prefill hang where the encoder cache could hold only
+      one large image and speculative prefill lookahead left the scheduler
+      taking empty steps until the request timed out.
